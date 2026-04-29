@@ -1,3 +1,6 @@
+from fastapi.responses import StreamingResponse
+from io import StringIO
+import csv
 from fastapi import FastAPI, HTTPException, Query
 from app.models.request import (
     PriorAuthRequest,
@@ -288,3 +291,94 @@ def get_dashboard_summary():
 
     db.close()
     return summary
+
+@app.get("/prior-auths/export/csv")
+def export_prior_auths_csv(
+    status: str | None = Query(default=None),
+    insurance_provider: str | None = Query(default=None),
+    patient_name: str | None = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="desc"),
+):
+    db = SessionLocal()
+    query = db.query(PriorAuth)
+
+    if status:
+        query = query.filter(PriorAuth.status == status)
+
+    if insurance_provider:
+        query = query.filter(PriorAuth.insurance_provider == insurance_provider)
+
+    if patient_name:
+        query = query.filter(PriorAuth.patient_name.ilike(f"%{patient_name}%"))
+
+    allowed_sort_fields = {
+        "created_at": PriorAuth.created_at,
+        "updated_at": PriorAuth.updated_at,
+        "patient_name": PriorAuth.patient_name,
+        "insurance_provider": PriorAuth.insurance_provider,
+        "status": PriorAuth.status,
+    }
+
+    if sort_by not in allowed_sort_fields:
+        db.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid sort_by. Allowed values: {', '.join(allowed_sort_fields.keys())}"
+        )
+
+    sort_column = allowed_sort_fields[sort_by]
+
+    if sort_order.lower() == "asc":
+        query = query.order_by(sort_column.asc())
+    elif sort_order.lower() == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        db.close()
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sort_order. Allowed values: asc, desc"
+        )
+
+    records = query.all()
+
+    output = StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([
+        "id",
+        "patient_name",
+        "insurance_provider",
+        "procedure_code",
+        "diagnosis_code",
+        "status",
+        "notes",
+        "prior_auth_required",
+        "rule_reason",
+        "created_at",
+        "updated_at",
+    ])
+
+    for r in records:
+        writer.writerow([
+            r.id,
+            r.patient_name,
+            r.insurance_provider,
+            r.procedure_code,
+            r.diagnosis_code,
+            r.status,
+            r.notes,
+            r.prior_auth_required,
+            r.rule_reason,
+            r.created_at,
+            r.updated_at,
+        ])
+
+    db.close()
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=prior_auths.csv"},
+    )
