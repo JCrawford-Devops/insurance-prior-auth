@@ -254,3 +254,37 @@ def evaluate_rules_for_existing_prior_auth(auth_id: int):
 
     db.close()
     return result
+
+
+@app.get("/dashboard/summary")
+def get_dashboard_summary():
+    db = SessionLocal()
+    records = db.query(PriorAuth).all()
+
+    summary = {
+        "total_requests": len(records),
+        "pending": 0,
+        "submitted": 0,
+        "approved": 0,
+        "denied": 0,
+        "prior_auth_required": 0,
+        "prior_auth_not_required": 0,
+    }
+
+    for r in records:
+        if r.status == "pending":
+            summary["pending"] += 1
+        elif r.status == "submitted":
+            summary["submitted"] += 1
+        elif r.status == "approved":
+            summary["approved"] += 1
+        elif r.status == "denied":
+            summary["denied"] += 1
+
+        if r.prior_auth_required:
+            summary["prior_auth_required"] += 1
+        else:
+            summary["prior_auth_not_required"] += 1
+
+    db.close()
+    return summary
