@@ -7,6 +7,7 @@ from app.models.request import (
 from app.models.db_models import PriorAuth
 from app.db.session import SessionLocal, engine
 from app.db.base import Base
+from app.services.rules_engine import evaluate_prior_auth_rule
 
 app = FastAPI()
 
@@ -27,6 +28,11 @@ def ping():
 def create_prior_auth(request: PriorAuthRequest):
     db = SessionLocal()
 
+    rule_result = evaluate_prior_auth_rule(
+        insurance_provider=request.insurance_provider,
+        procedure_code=request.procedure_code,
+    )
+
     new_request = PriorAuth(
         patient_name=request.patient_name,
         insurance_provider=request.insurance_provider,
@@ -34,6 +40,8 @@ def create_prior_auth(request: PriorAuthRequest):
         diagnosis_code=request.diagnosis_code,
         status="pending",
         notes=request.notes,
+        prior_auth_required=rule_result["prior_auth_required"],
+        rule_reason=rule_result["rule_reason"],
     )
 
     db.add(new_request)
@@ -45,6 +53,8 @@ def create_prior_auth(request: PriorAuthRequest):
         "id": new_request.id,
         "status": new_request.status,
         "notes": new_request.notes,
+        "prior_auth_required": new_request.prior_auth_required,
+        "rule_reason": new_request.rule_reason,
         "created_at": new_request.created_at,
         "updated_at": new_request.updated_at,
     }
@@ -116,6 +126,8 @@ def get_prior_auths(
             "diagnosis_code": r.diagnosis_code,
             "status": r.status,
             "notes": r.notes,
+            "prior_auth_required": r.prior_auth_required,
+            "rule_reason": r.rule_reason,
             "created_at": r.created_at,
             "updated_at": r.updated_at,
         })
@@ -146,6 +158,8 @@ def get_prior_auth(auth_id: int):
         "diagnosis_code": record.diagnosis_code,
         "status": record.status,
         "notes": record.notes,
+        "prior_auth_required": record.prior_auth_required,
+        "rule_reason": record.rule_reason,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
@@ -203,6 +217,38 @@ def update_prior_auth_notes(auth_id: int, update: PriorAuthNotesUpdate):
         "message": "Notes updated",
         "id": record.id,
         "notes": record.notes,
+        "updated_at": record.updated_at,
+    }
+
+    db.close()
+    return result
+
+
+@app.post("/prior-auths/{auth_id}/evaluate-rules")
+def evaluate_rules_for_existing_prior_auth(auth_id: int):
+    db = SessionLocal()
+    record = db.query(PriorAuth).filter(PriorAuth.id == auth_id).first()
+
+    if not record:
+        db.close()
+        raise HTTPException(status_code=404, detail="Prior auth not found")
+
+    rule_result = evaluate_prior_auth_rule(
+        insurance_provider=record.insurance_provider,
+        procedure_code=record.procedure_code,
+    )
+
+    record.prior_auth_required = rule_result["prior_auth_required"]
+    record.rule_reason = rule_result["rule_reason"]
+
+    db.commit()
+    db.refresh(record)
+
+    result = {
+        "message": "Rules evaluated",
+        "id": record.id,
+        "prior_auth_required": record.prior_auth_required,
+        "rule_reason": record.rule_reason,
         "updated_at": record.updated_at,
     }
 
