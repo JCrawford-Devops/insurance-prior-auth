@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prior Auth Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+      background: #f5f7fb;
+      color: #222;
+    }
+    h1 {
+      margin-bottom: 8px;
+    }
+    .sub {
+      color: #555;
+      margin-bottom: 20px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      color: #666;
+    }
+    .card p {
+      margin: 0;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .panel {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      margin-bottom: 20px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #555;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f5f9;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .muted {
+      color: #666;
+      font-size: 13px;
+    }
+    .error {
+      color: #b91c1c;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Prior Auth Dashboard</h1>
+  <div class="sub">Protected dashboard for queue review, filtering, and CSV export.</div>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="text" placeholder="Enter X-API-Key" />
+      </div>
+    </div>
+    <div class="button-row">
+      <button onclick="saveApiKey()">Save API Key</button>
+      <button onclick="refreshAll()">Refresh Dashboard</button>
+    </div>
+    <div id="errorBox" class="error"></div>
+  </div>
+
+  <div class="card-grid" id="summaryCards">
+    <div class="card"><h3>Total Requests</h3><p id="total_requests">0</p></div>
+    <div class="card"><h3>Pending</h3><p id="pending">0</p></div>
+    <div class="card"><h3>Submitted</h3><p id="submitted">0</p></div>
+    <div class="card"><h3>Approved</h3><p id="approved">0</p></div>
+    <div class="card"><h3>Denied</h3><p id="denied">0</p></div>
+    <div class="card"><h3>Prior Auth Required</h3><p id="prior_auth_required">0</p></div>
+    <div class="card"><h3>Not Required</h3><p id="prior_auth_not_required">0</p></div>
+  </div>
+
+  <div class="panel">
+    <h2>Queue Filters</h2>
+    <div class="row">
+      <div>
+        <label>Status</label>
+        <select id="status">
+          <option value="">Any</option>
+          <option value="pending">pending</option>
+          <option value="submitted">submitted</option>
+          <option value="approved">approved</option>
+          <option value="denied">denied</option>
+        </select>
+      </div>
+      <div>
+        <label>Insurance Provider</label>
+        <input id="insurance_provider" type="text" placeholder="Blue Cross" />
+      </div>
+      <div>
+        <label>Patient Name</label>
+        <input id="patient_name" type="text" placeholder="John" />
+      </div>
+      <div>
+        <label>Sort By</label>
+        <select id="sort_by">
+          <option value="created_at">created_at</option>
+          <option value="updated_at">updated_at</option>
+          <option value="patient_name">patient_name</option>
+          <option value="insurance_provider">insurance_provider</option>
+          <option value="status">status</option>
+        </select>
+      </div>
+      <div>
+        <label>Sort Order</label>
+        <select id="sort_order">
+          <option value="desc">desc</option>
+          <option value="asc">asc</option>
+        </select>
+      </div>
+      <div>
+        <label>Limit</label>
+        <select id="limit">
+          <option value="5">5</option>
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+        </select>
+      </div>
+      <div>
+        <label>Offset</label>
+        <input id="offset" type="number" value="0" min="0" />
+      </div>
+    </div>
+    <div class="button-row">
+      <button onclick="loadQueue()">Load Queue</button>
+      <button onclick="exportCsv()">Export CSV</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Requests</h2>
+    <div class="muted" id="queueMeta">No data loaded yet.</div>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Patient</th>
+          <th>Insurance</th>
+          <th>Procedure</th>
+          <th>Status</th>
+          <th>Prior Auth?</th>
+          <th>Notes</th>
+          <th>Created</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody id="queueBody">
+        <tr><td colspan="9">No records loaded yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const apiKeyInput = document.getElementById("apiKey");
+    const errorBox = document.getElementById("errorBox");
+    const queueBody = document.getElementById("queueBody");
+    const queueMeta = document.getElementById("queueMeta");
+
+    apiKeyInput.value = localStorage.getItem("prior_auth_api_key") || "";
+
+    function saveApiKey() {
+      localStorage.setItem("prior_auth_api_key", apiKeyInput.value.trim());
+      errorBox.textContent = "API key saved.";
+      setTimeout(() => errorBox.textContent = "", 1500);
+    }
+
+    function getApiKey() {
+      return apiKeyInput.value.trim();
+    }
+
+    function buildParams() {
+      const params = new URLSearchParams();
+
+      const status = document.getElementById("status").value;
+      const insurance = document.getElementById("insurance_provider").value.trim();
+      const patient = document.getElementById("patient_name").value.trim();
+      const sortBy = document.getElementById("sort_by").value;
+      const sortOrder = document.getElementById("sort_order").value;
+      const limit = document.getElementById("limit").value;
+      const offset = document.getElementById("offset").value;
+
+      if (status) params.append("status", status);
+      if (insurance) params.append("insurance_provider", insurance);
+      if (patient) params.append("patient_name", patient);
+
+      params.append("sort_by", sortBy);
+      params.append("sort_order", sortOrder);
+      params.append("limit", limit);
+      params.append("offset", offset);
+
+      return params;
+    }
+
+    async function apiFetch(url) {
+      const key = getApiKey();
+      if (!key) {
+        throw new Error("Enter an API key first.");
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          "X-API-Key": key
+        }
+      });
+
+      if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+          const data = await response.json();
+          if (data.detail) message = data.detail;
+        } catch {}
+        throw new Error(message);
+      }
+
+      return response;
+    }
+
+    async function loadSummary() {
+      const response = await apiFetch("/dashboard/summary");
+      const data = await response.json();
+
+      for (const key of Object.keys(data)) {
+        const el = document.getElementById(key);
+        if (el) el.textContent = data[key];
+      }
+    }
+
+    async function loadQueue() {
+      errorBox.textContent = "";
+      try {
+        const params = buildParams();
+        const response = await apiFetch(`/prior-auths?${params.toString()}`);
+        const data = await response.json();
+
+        queueMeta.textContent = `Showing ${data.items.length} of ${data.total_count} total records. Limit: ${data.limit}, Offset: ${data.offset}`;
+
+        if (!data.items.length) {
+          queueBody.innerHTML = `<tr><td colspan="9">No matching records found.</td></tr>`;
+          return;
+        }
+
+        queueBody.innerHTML = data.items.map(item => `
+          <tr>
+            <td>${item.id}</td>
+            <td>${item.patient_name}</td>
+            <td>${item.insurance_provider}</td>
+            <td>${item.procedure_code}</td>
+            <td><span class="status-pill">${item.status}</span></td>
+            <td>${item.prior_auth_required ? "Yes" : "No"}</td>
+            <td>${item.notes || ""}</td>
+            <td>${item.created_at || ""}</td>
+            <td>${item.updated_at || ""}</td>
+          </tr>
+        `).join("");
+      } catch (err) {
+        errorBox.textContent = err.message;
+      }
+    }
+
+    async function exportCsv() {
+      errorBox.textContent = "";
+      try {
+        const key = getApiKey();
+        if (!key) throw new Error("Enter an API key first.");
+
+        const params = buildParams();
+        const response = await fetch(`/prior-auths/export/csv?${params.toString()}`, {
+          headers: {
+            "X-API-Key": key
+          }
+        });
+
+        if (!response.ok) {
+          let message = `Export failed: ${response.status}`;
+          try {
+            const data = await response.json();
+            if (data.detail) message = data.detail;
+          } catch {}
+          throw new Error(message);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "prior_auths.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        errorBox.textContent = err.message;
+      }
+    }
+
+    async function refreshAll() {
+      errorBox.textContent = "";
+      try {
+        await loadSummary();
+        await loadQueue();
+      } catch (err) {
+        errorBox.textContent = err.message;
+      }
+    }
+
+    if (apiKeyInput.value) {
+      refreshAll();
+    }
+  </script>
+</body>
+</html>

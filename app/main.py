@@ -1,4 +1,4 @@
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from io import StringIO
 import csv
 from fastapi import FastAPI, HTTPException, Query
@@ -11,6 +11,8 @@ from app.models.db_models import PriorAuth
 from app.db.session import SessionLocal, engine
 from app.db.base import Base
 from app.services.rules_engine import evaluate_prior_auth_rule
+
+from pathlib import Path
 
 app = FastAPI()
 
@@ -26,6 +28,10 @@ def root():
 def ping():
     return {"status": "ok"}
 
+@app.get("/dashboard/ui", include_in_schema=False)
+def dashboard_ui():
+    file_path = Path(__file__).parent / "static" / "dashboard.html"
+    return FileResponse(file_path)
 
 @app.post("/prior-auth")
 def create_prior_auth(request: PriorAuthRequest):
