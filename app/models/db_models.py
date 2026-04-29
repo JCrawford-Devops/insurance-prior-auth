@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
 from app.db.base import Base
 
 
@@ -10,3 +11,7 @@ class PriorAuth(Base):
     insurance_provider = Column(String)
     procedure_code = Column(String)
     diagnosis_code = Column(String)
+    status = Column(String, default="pending")
+    notes = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

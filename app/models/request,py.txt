@@ -6,12 +6,7 @@ class PriorAuthRequest(BaseModel):
     insurance_provider: str
     procedure_code: str
     diagnosis_code: str
-    notes: str = ""
 
 
 class PriorAuthStatusUpdate(BaseModel):
     status: str
-
-
-class PriorAuthNotesUpdate(BaseModel):
-    notes: str
