@@ -116,11 +116,15 @@
       margin-top: 10px;
       font-weight: bold;
     }
+    .action-cell select,
+    .action-cell button {
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
   <h1>Prior Auth Dashboard</h1>
-  <div class="sub">Protected dashboard for queue review, filtering, and CSV export.</div>
+  <div class="sub">Protected dashboard for queue review, filtering, CSV export, and status updates.</div>
 
   <div class="panel">
     <div class="row">
@@ -136,7 +140,7 @@
     <div id="errorBox" class="error"></div>
   </div>
 
-  <div class="card-grid" id="summaryCards">
+  <div class="card-grid">
     <div class="card"><h3>Total Requests</h3><p id="total_requests">0</p></div>
     <div class="card"><h3>Pending</h3><p id="pending">0</p></div>
     <div class="card"><h3>Submitted</h3><p id="submitted">0</p></div>
@@ -219,10 +223,11 @@
           <th>Notes</th>
           <th>Created</th>
           <th>Updated</th>
+          <th>Action</th>
         </tr>
       </thead>
       <tbody id="queueBody">
-        <tr><td colspan="9">No records loaded yet.</td></tr>
+        <tr><td colspan="10">No records loaded yet.</td></tr>
       </tbody>
     </table>
   </div>
@@ -268,16 +273,20 @@
       return params;
     }
 
-    async function apiFetch(url) {
+    async function apiFetch(url, options = {}) {
       const key = getApiKey();
       if (!key) {
         throw new Error("Enter an API key first.");
       }
 
+      const headers = {
+        "X-API-Key": key,
+        ...(options.headers || {})
+      };
+
       const response = await fetch(url, {
-        headers: {
-          "X-API-Key": key
-        }
+        ...options,
+        headers
       });
 
       if (!response.ok) {
@@ -312,7 +321,7 @@
         queueMeta.textContent = `Showing ${data.items.length} of ${data.total_count} total records. Limit: ${data.limit}, Offset: ${data.offset}`;
 
         if (!data.items.length) {
-          queueBody.innerHTML = `<tr><td colspan="9">No matching records found.</td></tr>`;
+          queueBody.innerHTML = `<tr><td colspan="10">No matching records found.</td></tr>`;
           return;
         }
 
@@ -327,8 +336,37 @@
             <td>${item.notes || ""}</td>
             <td>${item.created_at || ""}</td>
             <td>${item.updated_at || ""}</td>
+            <td class="action-cell">
+              <select id="status-${item.id}">
+                <option value="pending" ${item.status === "pending" ? "selected" : ""}>pending</option>
+                <option value="submitted" ${item.status === "submitted" ? "selected" : ""}>submitted</option>
+                <option value="approved" ${item.status === "approved" ? "selected" : ""}>approved</option>
+                <option value="denied" ${item.status === "denied" ? "selected" : ""}>denied</option>
+              </select>
+              <button onclick="updateStatus(${item.id})">Update</button>
+            </td>
           </tr>
         `).join("");
+      } catch (err) {
+        errorBox.textContent = err.message;
+      }
+    }
+
+    async function updateStatus(authId) {
+      errorBox.textContent = "";
+      try {
+        const newStatus = document.getElementById(`status-${authId}`).value;
+
+        await apiFetch(`/prior-auths/${authId}/status`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ status: newStatus })
+        });
+
+        await loadSummary();
+        await loadQueue();
       } catch (err) {
         errorBox.textContent = err.message;
       }
@@ -337,24 +375,8 @@
     async function exportCsv() {
       errorBox.textContent = "";
       try {
-        const key = getApiKey();
-        if (!key) throw new Error("Enter an API key first.");
-
         const params = buildParams();
-        const response = await fetch(`/prior-auths/export/csv?${params.toString()}`, {
-          headers: {
-            "X-API-Key": key
-          }
-        });
-
-        if (!response.ok) {
-          let message = `Export failed: ${response.status}`;
-          try {
-            const data = await response.json();
-            if (data.detail) message = data.detail;
-          } catch {}
-          throw new Error(message);
-        }
+        const response = await apiFetch(`/prior-auths/export/csv?${params.toString()}`);
 
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
